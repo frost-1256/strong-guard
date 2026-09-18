@@ -25,8 +25,10 @@ MEOW_URL=https://raw.githubusercontent.com/MeowDump/MeowDump/refs/heads/main/Meg
 YURI_URL=https://raw.githubusercontent.com/Yurii0307/yurikey/main/key
 CUSTOM_KEYBOX=$SG/custom/keybox.xml
 
-BB=/data/adb/ksu/bin/busybox
-[ -x "$BB" ] || BB=""
+BB=""
+for _bb in /data/adb/ksu/bin/busybox /data/adb/magisk/busybox /data/adb/ap/bin/busybox; do
+	[ -x "$_bb" ] && BB=$_bb && break
+done
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 

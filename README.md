@@ -23,10 +23,17 @@ A KernelSU / Magisk module that keeps **Play Integrity `MEETS_STRONG_INTEGRITY`*
 
 ## Requirements
 
-- KernelSU / ReSukiSu (or Magisk) with root.
-- A keystore spoofer: **OhMyKeymint** (recommended) or **TrickyStore**.
-- **Play Integrity API Checker** (`gr.nikolasspyr.integritycheck`) for verdict checks.
-- Network access to `raw.githubusercontent.com` and `android.googleapis.com`.
+- **Android 12 or higher** (OhMyKeymint / TrickyStore requirement; KeyMint / keystore2).
+- **Root:** KernelSU / ReSukiSu (or Magisk). A WebUI-capable manager (KernelSU / ReSukiSu) is required for the WebUI.
+- **A keystore spoofer**, either:
+  - **OhMyKeymint** (recommended) — `/data/misc/keystore/omk/` must exist, GMS/GSF/Vending must be in its `scoop`, and the keybox must contain **both EC and RSA chains** (Strong Guard merges them automatically), or
+  - **TrickyStore** — `/data/adb/tricky_store/keybox.xml` is updated as well when present.
+- **Network access** to `raw.githubusercontent.com` (keybox sources) and `android.googleapis.com` (revocation list).
+- **Play Integrity API Checker** (`gr.nikolasspyr.integritycheck`). Without it, verdict-based detection is unavailable and only the CRL / expiry checks run.
+- **For verdict checks: screen on and unlocked.** Checks are skipped and retried later while locked.
+- An initial valid keybox is helpful but not required — Strong Guard fetches one from its sources if needed.
+- **Note:** Strong Guard only maintains the keybox and the verified-boot hash. Passing STRONG still requires a working fingerprint spoof (PIF) and your hiding stack (SUSFS / Shamiko / etc.).
+- busybox is auto-detected (`/data/adb/ksu/bin/busybox`, `/data/adb/magisk/busybox`, `/data/adb/ap/bin/busybox`); the module degrades gracefully without it.
 
 ## How it works
 
@@ -174,10 +181,17 @@ No license has been chosen for this personal project yet. Until one is added, al
 
 ## 必要なもの
 
-- KernelSU / ReSukiSu（または Magisk）の root 環境
-- キーストアスプーファー（**OhMyKeymint** 推奨、または **TrickyStore**）
-- **Play Integrity API Checker**（`gr.nikolasspyr.integritycheck`）
-- ネットワーク（GitHub raw / googleapis）
+- **Android 12 以上**（OhMyKeymint / TrickyStore の要件。KeyMint / keystore2 が必要）
+- **root**: KernelSU / ReSukiSu（または Magisk）。WebUI利用にはWebUI対応マネージャー（KernelSU / ReSukiSu）が必要
+- **キーストアスプーファー**（いずれか）
+  - **OhMyKeymint**（推奨）: `/data/misc/keystore/omk/` が存在し、GMS/GSF/Vending が `scoop` に入っていること。keyboxは**ECとRSAの両方**が必要（Strong Guardが自動マージ）、または
+  - **TrickyStore**: インストール済みなら `/data/adb/tricky_store/keybox.xml` も更新
+- **ネットワーク**: `raw.githubusercontent.com`（keybox取得）と `android.googleapis.com`（失効リスト）
+- **Play Integrity API Checker**（`gr.nikolasspyr.integritycheck`）。無い場合はCRL・期限切れベースのみで動作
+- **判定チェック実行時は画面オン＋ロック解除が必要**（ロック中はスキップし、後で再試行）
+- 初期keyboxは無くてもOK（ソースから取得します）
+- **注意**: Strong Guard は keybox と vb_hash の維持のみを担当します。STRONGを通すには別途 **PIF等の指紋スプーフ** と **SUSFS / Shamiko 等の隠蔽スタック** が必要です
+- busyboxは自動検出（`/data/adb/ksu/bin/busybox`、`/data/adb/magisk/busybox`、`/data/adb/ap/bin/busybox`）。無くても簡易動作します
 
 ## 導入
 
