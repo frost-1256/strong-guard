@@ -1,0 +1,6 @@
+id=strong_guard
+name=Strong Guard
+version=v1.0.0
+versionCode=100
+author=frost-1256
+description=Monitors MEETS_STRONG_INTEGRITY and auto-rotates the keybox (OhMyKeymint / TrickyStore) from live sources when it is revoked, expiring, or failing. Validates, merges EC+RSA, rolls back on failure, and can verify the verdict via the Play Integrity checker app.
