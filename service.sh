@@ -15,6 +15,8 @@ if [ "$1" = "daemon" ]; then
 
 	[ -s "$VAULT/keybox-good.xml" ] || cp -f "$OMK_KEYBOX" "$VAULT/keybox-good.xml" 2>/dev/null
 
+	sync_omk_vbhash
+
 	if ! keybox_check_file "$OMK_KEYBOX"; then
 		log "service: current keybox failed initial checks"
 		[ "$AUTO_ROTATE" = 1 ] && rotate_now

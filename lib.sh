@@ -13,6 +13,7 @@ CONF=$SG/config.conf
 OMK_KEYBOX=/data/misc/keystore/omk/keybox.xml
 OMK_MOD_KEYBOX=/data/adb/modules/oh_my_keymint/keybox.xml
 OMK_LOG=/data/misc/keystore/omk/keymint.log
+OMK_CONFIG=/data/misc/keystore/omk/config.toml
 TS_KEYBOX=/data/adb/tricky_store/keybox.xml
 CHECKER=gr.nikolasspyr.integritycheck
 
@@ -36,6 +37,7 @@ sg_conf() {
 	EXPIRY_WARN_DAYS=5
 	AUTO_ROTATE=1
 	NOTIFY=1
+	SYNC_VBHASH=1
 	SOURCES="meow yuri custom"
 	# shellcheck disable=SC1090
 	[ -f "$CONF" ] && . "$CONF"
@@ -48,6 +50,35 @@ now() { date +%s; }
 notify() {
 	[ "$NOTIFY" = 1 ] || return 0
 	cmd notification post -S bigtext -t "Strong Guard" sg_status "$1" >/dev/null 2>&1
+}
+
+# ---------- vbmeta hash consistency ----------
+
+# Keep OhMyKeymint's attested verifiedBootHash equal to the system property
+# (ro.boot.vbmeta.digest), otherwise KeyAttestation-style apps flag a
+# "Verified Boot hash mismatch". OMK starts before modules spoof the property,
+# so its "auto" mode often falls back to a random hash.
+sync_omk_vbhash() {
+	local prop cur
+	[ "$SYNC_VBHASH" = 1 ] || return 0
+	[ -f "$OMK_CONFIG" ] || return 0
+	prop=$(getprop ro.boot.vbmeta.digest 2>/dev/null | tr 'A-F' 'a-f' | tr -d ' \t\r\n')
+	[ -n "$prop" ] || return 0
+	[ "${#prop}" -eq 64 ] || return 0
+	case "$prop" in *[!0-9a-f]*) return 0;; esac
+	cur=$(sed -n 's/^vb_hash = "\([0-9a-fA-F]*\)".*/\1/p' "$OMK_CONFIG" | head -n1 | tr 'A-F' 'a-f')
+	[ "$cur" = "$prop" ] && return 0
+	log "vbhash: OMK vb_hash=$cur differs from prop=$prop, syncing"
+	cp -a "$OMK_CONFIG" "$VAULT/omk-config-$(date '+%Y%m%d-%H%M%S').toml" 2>/dev/null
+	sed -i "s|^vb_hash = .*|vb_hash = \"$prop\"|" "$OMK_CONFIG"
+	if grep -q "^vb_hash = \"$prop\"" "$OMK_CONFIG"; then
+		touch /data/adb/omk/restart.all 2>/dev/null
+		sleep 6
+		log "vbhash: synced to $prop (OMK restarted)"
+		notify "vb_hash をシステム値に同期しました"
+	else
+		log "vbhash: sync failed (no vb_hash line?)"
+	fi
 }
 
 # ---------- network / decoding ----------
@@ -489,6 +520,7 @@ rotate_now() {
 
 health_check() {
 	local exp n
+	sync_omk_vbhash
 	refresh_crl
 	if ! keybox_check_file "$OMK_KEYBOX"; then
 		log "health: current keybox invalid/expired/revoked"

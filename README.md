@@ -16,6 +16,7 @@ A KernelSU / Magisk module that keeps **Play Integrity `MEETS_STRONG_INTEGRITY`*
 - **Real verdict checks** — periodically drives the *Play Integrity API Checker* app via `uiautomator` and reads the actual BASIC / DEVICE / STRONG verdicts (only while the screen is on and unlocked).
 - **Automatic recovery** — when the keybox is revoked, expiring, or failing, it fetches a fresh keybox from public sources, validates it on device, installs it atomically, confirms the hot-reload, clears DroidGuard caches, re-checks the verdict, and **rolls back automatically** if anything goes wrong.
 - **On-device validation** — certificate parsing (serial / notBefore / notAfter) is done with a tiny pure-`awk` DER parser; no `openssl` required.
+- **Verified Boot hash sync** — keeps OhMyKeymint's attested `verifiedBootHash` equal to the system `ro.boot.vbmeta.digest`, so KeyAttestation-style apps don't flag a “Verified Boot hash mismatch”.
 - **EC + RSA merge** — adapts keyboxes to spoofers that require both chains (e.g. OhMyKeymint).
 - **Material 3 WebUI** with Japanese / English switching.
 - Works with **OhMyKeymint** (primary) and **TrickyStore** (if installed).
@@ -77,6 +78,7 @@ Uninstalling through the manager stops the daemon (runtime data under `/data/adb
 | `EXPIRY_WARN_DAYS` | `5` | Rotate proactively when the keybox expires within N days and a newer candidate exists |
 | `AUTO_ROTATE` | `1` | Enable automatic recovery |
 | `NOTIFY` | `1` | Post Android notifications on recovery / failure |
+| `SYNC_VBHASH` | `1` | Sync OhMyKeymint `vb_hash` with `ro.boot.vbmeta.digest` (restarts OMK when it changes) |
 | `SOURCES` | `meow yuri custom` | Candidate sources |
 
 **Bring your own private keybox:** drop a keybox XML at `/data/adb/strong_guard/custom/keybox.xml`. It is used with the highest priority and is the most reliable option.
@@ -104,6 +106,22 @@ Shows the current verdicts, keybox expiry, daemon / spoofer status, and lets you
 | `yuri` | [Yurii0307/yurikey](https://github.com/Yurii0307/yurikey) `key` (legacy backup) |
 
 Public/shared keyboxes are revoked or soft-banned in waves. The module recovers automatically as soon as a fresh keybox is available, **but no on-device tool can create a valid keybox out of thin air** — if every source is dead or revoked, STRONG stays down until a new one is published. A private, unshared keybox is the most durable option.
+
+## Troubleshooting
+
+### KeyAttestation-style apps report “Verified Boot hash mismatch”
+
+Some devices never pass `ro.boot.vbmeta.digest` from the bootloader. OhMyKeymint's `vb_hash = "auto"` then falls back to a **random** hash while the hiding modules set the property later, so the attestation record and the system property disagree.
+
+Strong Guard fixes this automatically: after boot and on every health check it writes the current `ro.boot.vbmeta.digest` into `/data/misc/keystore/omk/config.toml` (`[trust] vb_hash = "<64 hex>"`) and restarts OMK. Manual equivalent:
+
+```sh
+prop=$(getprop ro.boot.vbmeta.digest)
+sed -i "s|^vb_hash = .*|vb_hash = \"$prop\"|" /data/misc/keystore/omk/config.toml
+touch /data/adb/omk/restart.all
+```
+
+After an OMK restart Play Integrity may keep failing for a few minutes (GMS negative caching); it recovers on its own.
 
 ## Files
 
@@ -150,6 +168,7 @@ No license has been chosen for this personal project yet. Until one is added, al
 - keybox の構造・証明書期限・Google失効リスト（`attestation/status`）を定期チェック
 - Play Integrity API Checker アプリを `uiautomator` 経由で操作し、**実際の BASIC / DEVICE / STRONG 判定**を定期取得（画面ロック・消灯中はスキップ）
 - 異常検知時は公開ソースから新しい keybox を取得 → 端末内で検証（純 `awk` 製 DER パーサ）→ EC/RSA をマージ → バックアップ後に原子的に適用 → ホットリロード確認 → DroidGuard キャッシュ削除 → 再判定 → **失敗時は自動ロールバック**
+- **Verified Boot hash の自動同期** — OhMyKeymint が attestation に載せる `verifiedBootHash` をシステムの `ro.boot.vbmeta.digest` に一致させ、KeyAttestation 系アプリの「Verified Boot hash mismatch」を防ぎます
 - Material 3 の WebUI（日本語 / English 切替）
 - **OhMyKeymint** を主対象、**TrickyStore** があれば併せて更新
 
@@ -179,6 +198,7 @@ zip -r strong_guard.zip . -x '.git/*' -x 'README.md'
 - `EXPIRY_WARN_DAYS`（5）: 期限切れが近く、より新しい候補がある場合に事前ローテーション
 - `AUTO_ROTATE`（1）: 自動回復の有効/無効
 - `NOTIFY`（1）: 回復・失敗時の通知
+- `SYNC_VBHASH`（1）: OhMyKeymint の `vb_hash` を `ro.boot.vbmeta.digest` に同期（変更時はOMKを再起動）
 - `SOURCES`（`meow yuri custom`）: 候補ソース
 
 **私有 keybox を使う場合:** `/data/adb/strong_guard/custom/keybox.xml` に置くと最優先で使われます（最も確実です）。
@@ -194,6 +214,22 @@ WebUI は KernelSU マネージャー → Strong Guard → **WebUI** から。
 ## できること・できないこと
 
 公開 keybox は定期的に失効・ソフトBANされるため、ソースが生きている限りは自動回復できます。ただし**端末側だけで有効な keybox を新規生成することは原理的に不可能**です。全ソースが失効・配布停止した場合は、新しい keybox が公開されるまで STRONG は通りません。**非公開のkeyboxを `custom` に置くのが最も確実**です。
+
+## トラブルシューティング
+
+### KeyAttestation系アプリで「Verified Boot hash mismatch」
+
+ブートローダーが `ro.boot.vbmeta.digest` を渡さない端末では、OhMyKeymint の `vb_hash = "auto"` が**ランダム値にフォールバック**し、後からモジュールが設定する prop と食い違います。
+
+Strong Guard は起動時と1時間ごとに prop の値を `/data/misc/keystore/omk/config.toml` の `[trust] vb_hash` に書き込み、OMKを再起動して自動修正します。手動の場合:
+
+```sh
+prop=$(getprop ro.boot.vbmeta.digest)
+sed -i "s|^vb_hash = .*|vb_hash = \"$prop\"|" /data/misc/keystore/omk/config.toml
+touch /data/adb/omk/restart.all
+```
+
+OMKの再起動直後はGMSのネガティブキャッシュで数分Failすることがありますが、自然に回復します。
 
 ## クレジット
 

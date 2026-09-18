@@ -14,6 +14,7 @@ VERDICT_INTERVAL_H=24
 EXPIRY_WARN_DAYS=5
 AUTO_ROTATE=1
 NOTIFY=1
+SYNC_VBHASH=1
 SOURCES="meow yuri custom"
 # Drop a private keybox at /data/adb/strong_guard/custom/keybox.xml
 # to have it preferred over all public sources.
